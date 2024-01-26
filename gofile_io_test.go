@@ -1,0 +1,66 @@
+package gofileioupload
+
+import (
+	"fmt"
+	"regexp"
+	"testing"
+)
+
+var storePattern = regexp.MustCompile(`^store\d{1,2}$`)
+var fileLinkPattern = regexp.MustCompile(`(https:\/\/gofile\.io\/d\/[A-Za-z0-9]{6})`)
+
+func Test_bestServer(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		t.Run(fmt.Sprintf("test number %d", i), func(t *testing.T) {
+			t.Parallel()
+			a := NewAccount()
+			got, err := a.bestServer()
+			if err != nil {
+				t.Errorf("could not make a request to gofile: %v", err)
+				return
+			}
+			if !storePattern.MatchString(got) {
+				t.Errorf("bestServer() = %v, want a value matching the pattern 'store\\d{1,2}'\n", got)
+				return
+			}
+			fmt.Printf("-------> Successfully Got Server: %s\n", got)
+
+		})
+	}
+}
+
+func TestUploadFile(t *testing.T) {
+	type args struct {
+		filePath string
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		// TODO: Add test cases.
+		{
+			name: "Image File Upload Test",
+			args: args{filePath: "test_files/esra-afsar-933v7OL5y5M-unsplash.jpg"},
+		},
+		{
+			name: "Video File Upload Test",
+			args: args{filePath: "test_files/bbb_sunflower_1080p_30fps_normal.mp4"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewAccount()
+			got, err := a.UploadFile(tt.args.filePath)
+			if err != nil {
+				t.Errorf("UploadFile() error = %v", err)
+				return
+			}
+			if !fileLinkPattern.MatchString(got) {
+				t.Errorf("bestServer() = %v, want a go file link\n", got)
+				return
+			}
+			fmt.Printf("--- Success!: link: %s\n", got)
+
+		})
+	}
+}
