@@ -100,6 +100,7 @@ func (a *Account) UploadFile(filePath string) (string, error) {
 		setErr(err)
 		_, err = io.Copy(part, bufferedFileReader) // copy the file to the part
 		setErr(err)
+		a.otherFormFile(writer)
 		setErr(writer.Close())     // close multipart writer first.
 		setErr(bodyWriter.Close()) // then close body writer.
 	}()
@@ -136,6 +137,24 @@ func (a *Account) UploadFile(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	a.setAccountDetails(output.Data)
 	return output.Data["downloadPage"], nil
+}
+
+func (a *Account) otherFormFile(multiWriter *multipart.Writer) {
+	if a.folderID != "" {
+		multiWriter.WriteField("folderId", a.folderID)
+	}
+	if a.token != "" {
+		multiWriter.WriteField("token", a.token)
+	}
+}
+
+func (a *Account) setAccountDetails(data map[string]string) {
+	if a.folderID == "" {
+		a.AddFolderID(data["parentFolder"])
+	}
+	if a.token == "" {
+		a.AddToken(data["guestToken"])
+	}
 }

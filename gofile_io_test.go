@@ -30,6 +30,7 @@ func Test_bestServer(t *testing.T) {
 }
 
 func TestUploadFile(t *testing.T) {
+	a := NewAccount()
 	type args struct {
 		filePath string
 	}
@@ -43,13 +44,20 @@ func TestUploadFile(t *testing.T) {
 			args: args{filePath: "test_files/esra-afsar-933v7OL5y5M-unsplash.jpg"},
 		},
 		{
+			name: "music File Upload Test 01",
+			args: args{filePath: "test_files/better-day-186374.mp3"},
+		},
+		{
+			name: "music File Upload Test 02",
+			args: args{filePath: "test_files/coverless-book-186307.mp3"},
+		},
+		{
 			name: "Video File Upload Test",
 			args: args{filePath: "test_files/bbb_sunflower_1080p_30fps_normal.mp4"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAccount()
 			got, err := a.UploadFile(tt.args.filePath)
 			if err != nil {
 				t.Errorf("UploadFile() error = %v", err)
