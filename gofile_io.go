@@ -1,6 +1,12 @@
 // Package gofileioupload contains tools to upload files to gofile.io.
 package gofileioupload
 
+/*
+This package is not meant as a way to interact with your gofile.io Client.
+The vision behind this package is to stay anonymous and still be able to upload
+single or multiple files.
+*/
+
 import (
 	"bufio"
 	"encoding/json"
@@ -13,7 +19,8 @@ import (
 	"sync"
 )
 
-type Account struct {
+// Client contains details to remember Client / folder ID.
+type Client struct {
 	token    string
 	folderID string
 }
@@ -24,21 +31,28 @@ type goFileResponse struct {
 	Data   map[string]string `json:"data"`
 }
 
-func NewAccount() *Account {
-	return &Account{}
+// NewClient creates a new instance of Client.
+// client gets the account token and folderID from
+// the first file uploaded to gofile.
+func NewClient() *Client {
+	return &Client{}
 
 }
 
-func (a *Account) AddToken(token string) {
-	a.token = token
+// AddToken takes an account token / guest token and add it to the Client.
+func (c *Client) AddToken(token string) {
+	c.token = token
 }
 
-func (a *Account) AddFolderID(id string) {
-	a.folderID = id
+// AddFolderID takes a FolderID and adds it to the client.
+// all the files uploaded using client would be uploaded
+// to this folder.
+func (c *Client) AddFolderID(id string) {
+	c.folderID = id
 }
 
 // bestServer returns the best server on gofile to upload file to.
-func (a *Account) bestServer() (string, error) {
+func (c *Client) bestServer() (string, error) {
 	resp, err := http.Get("https://api.gofile.io/getServer")
 	if err != nil {
 		// we return "store16" is anything goes wrong, its our so called default server.
@@ -48,7 +62,8 @@ func (a *Account) bestServer() (string, error) {
 
 	// check if we got 200, if not error out.
 	if resp.Status != "200 OK" {
-		return "store16", fmt.Errorf("wanted: '200 OK', got status code: %s", resp.Status)
+		return "store16", fmt.Errorf(
+			"bestServer  wanted: '200 OK', got status code: %s", resp.Status)
 	}
 	decoder := json.NewDecoder(resp.Body) // finally stopped using io.Readall!
 
@@ -62,7 +77,8 @@ func (a *Account) bestServer() (string, error) {
 }
 
 // UploadFile takes path a file and uploads it to gofile.io.
-func (a *Account) UploadFile(filePath string) (string, error) {
+// TODO: split this function, its too big.
+func (c *Client) UploadFile(filePath string) (string, error) {
 
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0644) // open file as read only.
 	if err != nil {
@@ -100,12 +116,12 @@ func (a *Account) UploadFile(filePath string) (string, error) {
 		setErr(err)
 		_, err = io.Copy(part, bufferedFileReader) // copy the file to the part
 		setErr(err)
-		a.otherFormFile(writer)
+		c.otherFormFile(writer)
 		setErr(writer.Close())     // close multipart writer first.
 		setErr(bodyWriter.Close()) // then close body writer.
 	}()
 
-	best, err := a.bestServer() // get the best server.
+	best, err := c.bestServer() // get the best server.
 	if err != nil {
 		// TODO: find a better way to handle this error.
 		fmt.Println(err.Error()) // we print the error here and use the default server.
@@ -137,24 +153,28 @@ func (a *Account) UploadFile(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	a.setAccountDetails(output.Data)
+	c.setClientDetails(output.Data)
 	return output.Data["downloadPage"], nil
 }
 
-func (a *Account) otherFormFile(multiWriter *multipart.Writer) {
-	if a.folderID != "" {
-		multiWriter.WriteField("folderId", a.folderID)
+// otherFormFile adds the folderId and account token (if they exist)
+// to currently uploading file.
+func (c *Client) otherFormFile(multiWriter *multipart.Writer) {
+	if c.folderID != "" {
+		multiWriter.WriteField("folderId", c.folderID)
 	}
-	if a.token != "" {
-		multiWriter.WriteField("token", a.token)
+	if c.token != "" {
+		multiWriter.WriteField("token", c.token)
 	}
 }
 
-func (a *Account) setAccountDetails(data map[string]string) {
-	if a.folderID == "" {
-		a.AddFolderID(data["parentFolder"])
+// setClientDetails sets the client details after the first successful
+// upload to gofile from a created client.
+func (c *Client) setClientDetails(data map[string]string) {
+	if c.folderID == "" {
+		c.AddFolderID(data["parentFolder"])
 	}
-	if a.token == "" {
-		a.AddToken(data["guestToken"])
+	if c.token == "" {
+		c.AddToken(data["guestToken"])
 	}
 }

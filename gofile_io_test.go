@@ -13,7 +13,7 @@ func Test_bestServer(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		t.Run(fmt.Sprintf("test number %d", i), func(t *testing.T) {
 			t.Parallel()
-			a := NewAccount()
+			a := NewClient()
 			got, err := a.bestServer()
 			if err != nil {
 				t.Errorf("could not make a request to gofile: %v", err)
@@ -30,7 +30,7 @@ func Test_bestServer(t *testing.T) {
 }
 
 func TestUploadFile(t *testing.T) {
-	a := NewAccount()
+	a := NewClient()
 	type args struct {
 		filePath string
 	}
