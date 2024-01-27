@@ -63,11 +63,11 @@ func TestUploadFile(t *testing.T) {
 				t.Errorf("UploadFile() error = %v", err)
 				return
 			}
-			if !fileLinkPattern.MatchString(got) {
-				t.Errorf("bestServer() = %v, want a go file link\n", got)
+			if !fileLinkPattern.MatchString(got.DownloadPage) {
+				t.Errorf("bestServer() = %v, want a go file link\n", got.DownloadPage)
 				return
 			}
-			fmt.Printf("--- Success!: link: %s\n", got)
+			fmt.Printf("--- Success!: link: %s\n", got.DownloadPage)
 
 		})
 	}

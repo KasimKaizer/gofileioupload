@@ -19,24 +19,11 @@ import (
 	"sync"
 )
 
-// Client contains details to remember Client / folder ID.
-type Client struct {
-	token    string
-	folderID string
-}
-
-// goFileResponse is a structure for the response from gofile.
-type goFileResponse struct {
-	Status string            `json:"status"`
-	Data   map[string]string `json:"data"`
-}
-
 // NewClient creates a new instance of Client.
 // client gets the account token and folderID from
 // the first file uploaded to gofile.
 func NewClient() *Client {
 	return &Client{}
-
 }
 
 // AddToken takes an account token / guest token and add it to the Client.
@@ -67,22 +54,22 @@ func (c *Client) bestServer() (string, error) {
 	}
 	decoder := json.NewDecoder(resp.Body) // finally stopped using io.Readall!
 
-	var output goFileResponse
+	var output goFileResponse[serverData]
 	err = decoder.Decode(&output) // decode our response body into our output.
 	if err != nil {
 		fmt.Println(err)
 		return "store16", err
 	}
-	return output.Data["server"], nil // return the server we got.
+	return output.Data.Server, nil // return the server we got.
 }
 
 // UploadFile takes path a file and uploads it to gofile.io.
 // TODO: split this function, its too big.
-func (c *Client) UploadFile(filePath string) (string, error) {
+func (c *Client) UploadFile(filePath string) (*FileData, error) {
 
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0644) // open file as read only.
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	// we reduce the number of syscalls when reading from the disk.
 	bufferedFileReader := bufio.NewReader(file)
@@ -136,25 +123,25 @@ func (c *Client) UploadFile(filePath string) (string, error) {
 	// or in the event of a HTTP error.
 	resp, err := http.DefaultClient.Do(req) // better then making a new http client
 	if writeErr != nil {
-		return "", writeErr
+		return nil, writeErr
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.Status != "200 OK" { // check if we were able to post  successfully, if not return the status code.
-		return "", fmt.Errorf("wanted: '200 OK', got status code: %s", resp.Status)
+		return nil, fmt.Errorf("wanted: '200 OK', got status code: %s", resp.Status)
 	}
 	decoder := json.NewDecoder(resp.Body)
 
-	var output goFileResponse
+	var output goFileResponse[FileData]
 	err = decoder.Decode(&output)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	c.setClientDetails(output.Data)
-	return output.Data["downloadPage"], nil
+	c.setClientDetails(&output.Data)
+	return &output.Data, nil
 }
 
 // otherFormFile adds the folderId and account token (if they exist)
@@ -170,11 +157,11 @@ func (c *Client) otherFormFile(multiWriter *multipart.Writer) {
 
 // setClientDetails sets the client details after the first successful
 // upload to gofile from a created client.
-func (c *Client) setClientDetails(data map[string]string) {
+func (c *Client) setClientDetails(data *FileData) {
 	if c.folderID == "" {
-		c.AddFolderID(data["parentFolder"])
+		c.AddFolderID(data.ParentFolder)
 	}
 	if c.token == "" {
-		c.AddToken(data["guestToken"])
+		c.AddToken(data.GuestToken)
 	}
 }
