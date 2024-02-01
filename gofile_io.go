@@ -71,9 +71,9 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close() // close the file once this function is done executing.
 	// we reduce the number of syscalls when reading from the disk.
 	bufferedFileReader := bufio.NewReader(file)
-	defer file.Close() // close the file once this function is done executing.
 
 	// link to the comment which inspired this idea.
 	// https://gist.github.com/mattetti/5914158?permalink_comment_id=3422260#gistcomment-3422260
@@ -116,6 +116,9 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 	serUrl := fmt.Sprintf("https://%s.gofile.io/uploadFile", best)
 	// add out bodyReader, basically the whole file we wrote to request.
 	req, err := http.NewRequest("POST", serUrl, bodyReader)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Add("Content-Type", writer.FormDataContentType())
 
 	// This operation will block until both the writer
