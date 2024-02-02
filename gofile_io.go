@@ -23,7 +23,7 @@ import (
 // client gets the account token and folderID from
 // the first file uploaded to gofile.
 func NewClient() *Client {
-	return &Client{}
+	return &Client{token: "", folderID: ""}
 }
 
 // AddToken takes an account token / guest token and add it to the Client.
