@@ -12,7 +12,6 @@ var fileLinkPattern = regexp.MustCompile(`(https:\/\/gofile\.io\/d\/[A-Za-z0-9]{
 func Test_bestServer(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		t.Run(fmt.Sprintf("test number %d", i), func(t *testing.T) {
-			t.Parallel()
 			a := NewClient()
 			got, err := a.bestServer()
 			if err != nil {
@@ -23,7 +22,6 @@ func Test_bestServer(t *testing.T) {
 				t.Errorf("bestServer() = %v, want a value matching the pattern 'store\\d{1,2}'\n", got)
 				return
 			}
-			fmt.Printf("-------> Successfully Got Server: %s\n", got)
 
 		})
 	}
@@ -56,19 +54,17 @@ func TestUploadFile(t *testing.T) {
 			args: args{filePath: "test_files/bbb_sunflower_1080p_30fps_normal.mp4"},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := a.UploadFile(tt.args.filePath)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := a.UploadFile(test.args.filePath)
 			if err != nil {
-				t.Errorf("UploadFile() error = %v", err)
+				t.Error(err)
 				return
 			}
 			if !fileLinkPattern.MatchString(got.DownloadPage) {
-				t.Errorf("bestServer() = %v, want a go file link\n", got.DownloadPage)
+				t.Errorf("got: %s, wanted a gofile link\n", got.DownloadPage)
 				return
 			}
-			fmt.Printf("--- Success!: link: %s\n", got.DownloadPage)
-
 		})
 	}
 }

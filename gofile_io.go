@@ -40,91 +40,76 @@ func (c *Client) AddFolderID(id string) {
 
 // bestServer returns the best server on gofile to upload file to.
 func (c *Client) bestServer() (string, error) {
+	const defaultServer = "store16"
 	resp, err := http.Get("https://api.gofile.io/getServer")
 	if err != nil {
 		// we return "store16" is anything goes wrong, its our so called default server.
-		return "store16", err
+		return defaultServer, err
 	}
-	defer resp.Body.Close() // close the body of response after this function is done.
+	defer resp.Body.Close()
 
-	// check if we got 200, if not error out.
-	if resp.Status != "200 OK" {
-		return "store16", fmt.Errorf(
-			"bestServer  wanted: '200 OK', got status code: %s", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		return defaultServer, fmt.Errorf("gofileioupload.bestServer: got status: %s", resp.Status)
 	}
-	decoder := json.NewDecoder(resp.Body) // finally stopped using io.Readall!
-
 	var output goFileResponse[serverData]
-	err = decoder.Decode(&output) // decode our response body into our output.
+	err = json.NewDecoder(resp.Body).Decode(&output)
 	if err != nil {
 		fmt.Println(err)
-		return "store16", err
+		return defaultServer, err
 	}
-	return output.Data.Server, nil // return the server we got.
+	return output.Data.Server, nil
 }
 
 // UploadFile takes path a file and uploads it to gofile.io.
-// TODO: split this function, its too big.
 func (c *Client) UploadFile(filePath string) (*FileData, error) {
+	// TODO: split this function, its too big.
 
-	file, err := os.OpenFile(filePath, os.O_RDONLY, 0644) // open file as read only.
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close() // close the file once this function is done executing.
-	// we reduce the number of syscalls when reading from the disk.
+	defer file.Close()
 	bufferedFileReader := bufio.NewReader(file)
 
-	// link to the comment which inspired this idea.
 	// https://gist.github.com/mattetti/5914158?permalink_comment_id=3422260#gistcomment-3422260
-	// Create a pipe for writing from the file and reading to
-	// the request concurrently.
 	bodyReader, bodyWriter := io.Pipe()
-	defer bodyReader.Close() // remember to close this.
+	defer bodyReader.Close()
 
 	writer := multipart.NewWriter(bodyWriter)
 
 	var (
-		writeErr error     // will store our first returned error.
-		errOnce  sync.Once // will write the first error to writeErr only once.
+		writeErr error
+		errOnce  sync.Once
 	)
-
-	// decrease the amount of bloated code, also set the first error we get to writeErr.
 	setErr := func(err error) {
 		if err != nil {
-			errOnce.Do(func() { writeErr = err }) // will only happen once.
+			errOnce.Do(func() { writeErr = err })
 		}
 	}
 
 	go func() {
-		// go routine to write to form concurrently, in future if we want to upload multiple files
-		// at once, then we would just call CreateFormFile on each file.
-		part, err := writer.CreateFormFile("file", path.Base(filePath)) // path.Base -> file_name.ext
+		part, err := writer.CreateFormFile("file", path.Base(filePath))
 		setErr(err)
-		_, err = io.Copy(part, bufferedFileReader) // copy the file to the part
+		_, err = io.Copy(part, bufferedFileReader)
 		setErr(err)
 		c.otherFormFile(writer)
-		setErr(writer.Close())     // close multipart writer first.
-		setErr(bodyWriter.Close()) // then close body writer.
+		setErr(writer.Close())
+		setErr(bodyWriter.Close())
 	}()
 
-	best, err := c.bestServer() // get the best server.
+	best, err := c.bestServer()
 	if err != nil {
 		// TODO: find a better way to handle this error.
-		fmt.Println(err.Error()) // we print the error here and use the default server.
+		fmt.Println(err)
 	}
 	serUrl := fmt.Sprintf("https://%s.gofile.io/uploadFile", best)
-	// add out bodyReader, basically the whole file we wrote to request.
 	req, err := http.NewRequest("POST", serUrl, bodyReader)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Add("Content-Type", writer.FormDataContentType())
 
-	// This operation will block until both the writer
-	// and bodyWriter have been closed by the goroutine,
-	// or in the event of a HTTP error.
-	resp, err := http.DefaultClient.Do(req) // better then making a new http client
+	resp, err := http.DefaultClient.Do(req)
 	if writeErr != nil {
 		return nil, writeErr
 	}
@@ -133,13 +118,11 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.Status != "200 OK" { // check if we were able to post  successfully, if not return the status code.
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("wanted: '200 OK', got status code: %s", resp.Status)
 	}
-	decoder := json.NewDecoder(resp.Body)
-
 	var output goFileResponse[FileData]
-	err = decoder.Decode(&output)
+	err = json.NewDecoder(resp.Body).Decode(&output)
 	if err != nil {
 		return nil, err
 	}
