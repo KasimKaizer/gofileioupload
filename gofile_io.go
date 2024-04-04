@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"sync"
 )
 
 // NewClient creates a new instance of Client.
@@ -40,22 +39,20 @@ func (c *Client) AddFolderID(id string) {
 
 // bestServer returns the best server on gofile to upload file to.
 func (c *Client) bestServer() (string, error) {
-	const defaultServer = "store16"
 	resp, err := http.Get("https://api.gofile.io/getServer")
 	if err != nil {
-		// we return "store16" is anything goes wrong, its our so called default server.
-		return defaultServer, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return defaultServer, fmt.Errorf("gofileioupload.bestServer: got status: %s", resp.Status)
+		return "", fmt.Errorf("gofileioupload.bestServer: got status: %s", resp.Status)
 	}
 	var output goFileResponse[serverData]
 	err = json.NewDecoder(resp.Body).Decode(&output)
 	if err != nil {
 		fmt.Println(err)
-		return defaultServer, err
+		return "", err
 	}
 	return output.Data.Server, nil
 }
@@ -79,28 +76,42 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 
 	var (
 		writeErr error
-		errOnce  sync.Once
+		// errOnce  sync.Once
 	)
 	setErr := func(err error) {
 		if err != nil {
-			errOnce.Do(func() { writeErr = err })
+			if writeErr == nil {
+				writeErr = err
+				return
+			}
+			writeErr = fmt.Errorf("%w: %w", writeErr, err)
 		}
 	}
 
 	go func() {
+		defer func() {
+			setErr(writer.Close())
+			setErr(bodyWriter.Close())
+		}()
 		part, err := writer.CreateFormFile("file", path.Base(filePath))
-		setErr(err)
+		if err != nil {
+			setErr(err)
+			return
+		}
 		_, err = io.Copy(part, bufferedFileReader)
-		setErr(err)
+		if err != nil {
+			setErr(err)
+			return
+		}
 		c.otherFormFile(writer)
-		setErr(writer.Close())
-		setErr(bodyWriter.Close())
 	}()
 
 	best, err := c.bestServer()
 	if err != nil {
-		// TODO: find a better way to handle this error.
 		fmt.Println(err)
+
+		// we use "store16" is anything goes wrong, its our default server.
+		best = "store16"
 	}
 	serUrl := fmt.Sprintf("https://%s.gofile.io/uploadFile", best)
 	req, err := http.NewRequest("POST", serUrl, bodyReader)

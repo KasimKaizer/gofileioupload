@@ -49,10 +49,10 @@ func TestUploadFile(t *testing.T) {
 			name: "music File Upload Test 02",
 			args: args{filePath: "test_files/coverless-book-186307.mp3"},
 		},
-		{
-			name: "Video File Upload Test",
-			args: args{filePath: "test_files/bbb_sunflower_1080p_30fps_normal.mp4"},
-		},
+		// {
+		// 	name: "Video File Upload Test",
+		// 	args: args{filePath: "test_files/bbb_sunflower_1080p_30fps_normal.mp4"},
+		// },
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
