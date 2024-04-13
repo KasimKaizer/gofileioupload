@@ -9,11 +9,11 @@ import (
 var storePattern = regexp.MustCompile(`^store\d{1,2}$`)
 var fileLinkPattern = regexp.MustCompile(`(https:\/\/gofile\.io\/d\/[A-Za-z0-9]{6})`)
 
-func Test_bestServer(t *testing.T) {
+func TestBestServer(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		t.Run(fmt.Sprintf("test number %d", i), func(t *testing.T) {
 			a := NewClient().SetRegion(Europe)
-			got, err := a.bestServer()
+			got, err := a.BestServer()
 			if err != nil {
 				t.Errorf("could not make a request to gofile: %v", err)
 			}
@@ -54,12 +54,17 @@ func TestUploadFile(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := a.UploadFile(test.args.filePath)
+			server, err := a.BestServer()
+			if err != nil {
+				t.Log(err)
+				server = "store16"
+			}
+			got, err := a.UploadFile(test.args.filePath, server)
 			if err != nil {
 				t.Error(err)
 			}
 			if !fileLinkPattern.MatchString(got.DownloadPage) {
-				t.Errorf("got: %s, wanted a gofile link\n", got.DownloadPage)
+				t.Fatalf("got: %s, wanted a gofile link\n", got.DownloadPage)
 			}
 		})
 	}

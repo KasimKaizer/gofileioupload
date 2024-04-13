@@ -59,8 +59,8 @@ func (c *Client) SetRegion(region Region) *Client {
 	return c
 }
 
-// bestServer returns the best server on gofile to upload file to.
-func (c *Client) bestServer() (string, error) {
+// BestServer returns the best server on gofile to upload file to.
+func (c *Client) BestServer() (string, error) {
 	url := "https://api.gofile.io/servers"
 	if c.region != "" {
 		url = fmt.Sprintf("%s?zone=%s", url, c.region)
@@ -72,7 +72,7 @@ func (c *Client) bestServer() (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gofileioupload.bestServer: got status: %s", resp.Status)
+		return "", fmt.Errorf("gofileioupload.BestServer: got status: %s", resp.Status)
 	}
 	var output goFileResponse[serverData]
 	err = json.NewDecoder(resp.Body).Decode(&output)
@@ -81,14 +81,15 @@ func (c *Client) bestServer() (string, error) {
 		return "", err
 	}
 	if len(output.Data.Servers) == 0 {
-		return "", errors.New("gofileioupload.bestServer: got no results for best servers")
+		return "", errors.New("gofileioupload.BestServer: got no results for best servers")
 	}
 	randServer := rand.IntN(len(output.Data.Servers))
 	return output.Data.Servers[randServer].Name, nil
 }
 
-// UploadFile takes path a file and uploads it to gofile.io.
-func (c *Client) UploadFile(filePath string) (*FileData, error) {
+// UploadFile takes path a file and a server to upload the file to, then it uploads the file to
+// that perticular server of gofile.io.
+func (c *Client) UploadFile(filePath, server string) (*FileData, error) {
 	// TODO: split this function, its too big.
 
 	file, err := os.Open(filePath)
@@ -98,9 +99,9 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 	defer file.Close()
 	bufferedFileReader := bufio.NewReader(file)
 
+	// this implementation was inspired by this comment:
 	// https://gist.github.com/mattetti/5914158?permalink_comment_id=3422260#gistcomment-3422260
 	bodyReader, bodyWriter := io.Pipe()
-	defer bodyReader.Close()
 
 	writer := multipart.NewWriter(bodyWriter)
 
@@ -117,7 +118,6 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 			writeErr = fmt.Errorf("%w: %w", writeErr, err)
 		}
 	}
-
 	go func() {
 		defer func() {
 			setErr(writer.Close())
@@ -135,14 +135,7 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 		}
 		c.otherFormFile(writer)
 	}()
-
-	best, err := c.bestServer()
-	if err != nil {
-		fmt.Println(err)
-		// we use "store16" if anything goes wrong, its our default server.
-		best = "store16"
-	}
-	serUrl := fmt.Sprintf("https://%s.gofile.io/contents/uploadfile", best)
+	serUrl := fmt.Sprintf("https://%s.gofile.io/contents/uploadfile", server)
 	req, err := http.NewRequest("POST", serUrl, bodyReader)
 	if err != nil {
 		return nil, err
