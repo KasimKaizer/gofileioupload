@@ -5,6 +5,7 @@ package gofileioupload
 type Client struct {
 	token    string
 	folderID string
+	region   string
 }
 
 // goFileResponse is a structure for the response from gofile.
@@ -14,7 +15,10 @@ type goFileResponse[T serverData | FileData] struct {
 }
 
 type serverData struct {
-	Server string `json:"server"`
+	Servers []struct {
+		Name string `json:"name"`
+		Zone string `json:"zone"`
+	} `json:"servers"`
 }
 
 type FileData struct {

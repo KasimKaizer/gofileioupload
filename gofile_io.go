@@ -10,12 +10,22 @@ single or multiple files.
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
+)
+
+type Region int
+
+const (
+	_ Region = iota
+	Europe
+	NorthAmerica
 )
 
 // NewClient creates a new instance of Client.
@@ -26,20 +36,36 @@ func NewClient() *Client {
 }
 
 // AddToken takes an account token / guest token and add it to the Client.
-func (c *Client) AddToken(token string) {
+func (c *Client) AddToken(token string) *Client {
 	c.token = token
+	return c
 }
 
 // AddFolderID takes a FolderID and adds it to the client.
 // all the files uploaded using client would be uploaded
 // to this folder.
-func (c *Client) AddFolderID(id string) {
+func (c *Client) AddFolderID(id string) *Client {
 	c.folderID = id
+	return c
+}
+
+func (c *Client) SetRegion(region Region) *Client {
+	switch region {
+	case NorthAmerica:
+		c.region = "na"
+	case Europe:
+		c.region = "eu"
+	}
+	return c
 }
 
 // bestServer returns the best server on gofile to upload file to.
 func (c *Client) bestServer() (string, error) {
-	resp, err := http.Get("https://api.gofile.io/getServer")
+	url := "https://api.gofile.io/servers"
+	if c.region != "" {
+		url = fmt.Sprintf("%s?zone=%s", url, c.region)
+	}
+	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -54,7 +80,11 @@ func (c *Client) bestServer() (string, error) {
 		fmt.Println(err)
 		return "", err
 	}
-	return output.Data.Server, nil
+	if len(output.Data.Servers) == 0 {
+		return "", errors.New("gofileioupload.bestServer: got no results for best servers")
+	}
+	randServer := rand.IntN(len(output.Data.Servers))
+	return output.Data.Servers[randServer].Name, nil
 }
 
 // UploadFile takes path a file and uploads it to gofile.io.
@@ -109,11 +139,10 @@ func (c *Client) UploadFile(filePath string) (*FileData, error) {
 	best, err := c.bestServer()
 	if err != nil {
 		fmt.Println(err)
-
-		// we use "store16" is anything goes wrong, its our default server.
+		// we use "store16" if anything goes wrong, its our default server.
 		best = "store16"
 	}
-	serUrl := fmt.Sprintf("https://%s.gofile.io/uploadFile", best)
+	serUrl := fmt.Sprintf("https://%s.gofile.io/contents/uploadfile", best)
 	req, err := http.NewRequest("POST", serUrl, bodyReader)
 	if err != nil {
 		return nil, err
