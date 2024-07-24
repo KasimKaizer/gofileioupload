@@ -1,4 +1,4 @@
-// Package gofileioupload contains tools to upload files to gofile.io.
+// gofileioupload contains tools to upload files to gofile.io.
 package gofileioupload
 
 /*
@@ -9,15 +9,16 @@ single or multiple files.
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
+	"time"
 )
 
 type Region int
@@ -65,10 +66,21 @@ func (c *Client) BestServer() (string, error) {
 	if c.region != "" {
 		url = fmt.Sprintf("%s?zone=%s", url, c.region)
 	}
-	resp, err := http.Get(url)
+
+	ctx, done := context.WithTimeout(
+		context.Background(),
+		5*time.Second) //nolint: gomnd // not reused.
+	defer done()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -77,14 +89,17 @@ func (c *Client) BestServer() (string, error) {
 	var output goFileResponse[serverData]
 	err = json.NewDecoder(resp.Body).Decode(&output)
 	if err != nil {
-		fmt.Println(err)
 		return "", err
 	}
 	if len(output.Data.Servers) == 0 {
 		return "", errors.New("gofileioupload.BestServer: got no results for best servers")
 	}
-	randServer := rand.IntN(len(output.Data.Servers))
-	return output.Data.Servers[randServer].Name, nil
+	for i := 0; i < len(output.Data.Servers); i++ {
+		if n := output.Data.Servers[i].Name; n != "" {
+			return n, nil
+		}
+	}
+	return "", errors.New("gofileioupload.BestServer: got no results for best servers")
 }
 
 // UploadFile takes path a file and a server to upload the file to, then it uploads the file to
